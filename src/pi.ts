@@ -13,6 +13,7 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai/compat";
+import type { ImageContent } from "@earendil-works/pi-ai/compat";
 import { readFileSync, readdirSync, statSync, type Dirent } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -238,14 +239,15 @@ export class PiController {
     return out;
   }
 
-  /** Prompt gönder. Streaming sırasındaysa kuyruğa followUp olarak eklenir. */
-  async prompt(text: string): Promise<void> {
+  /** Prompt gönder. Streaming sırasındaysa kuyruğa followUp olarak eklenir. Görsel(ler) eklenebilir. */
+  async prompt(text: string, images?: ImageContent[]): Promise<void> {
     const session = this.session;
     if (!session) throw new Error("aktif session yok");
+    const withImages = images && images.length > 0 ? { images } : {};
     if (session.isStreaming) {
-      await session.prompt(text, { streamingBehavior: "followUp" });
+      await session.prompt(text, { streamingBehavior: "followUp", ...withImages });
     } else {
-      await session.prompt(text);
+      await session.prompt(text, withImages);
     }
   }
 

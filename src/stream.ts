@@ -35,6 +35,8 @@ interface StreamState {
   lastEditAt: number;
   closed: boolean;
   pendingError: string | null;
+  toolCount: number;
+  startTime: number;
 }
 
 /**
@@ -57,6 +59,8 @@ export class TelegramStreamer {
       lastEditAt: 0,
       closed: false,
       pendingError: null,
+      toolCount: 0,
+      startTime: Date.now(),
     };
   }
 
@@ -74,12 +78,18 @@ export class TelegramStreamer {
         this.append(ev.delta);
       }
     } else if (event.type === "tool_execution_start") {
+      this.st.toolCount += 1;
       this.append(`\n\n🔧 ${event.toolName}`);
     } else if (event.type === "tool_execution_end") {
       this.append(` ✓`);
     } else if (event.type === "agent_end") {
       this.finish();
     }
+  }
+
+  /** İş istatistikleri (iş bitince özet için). */
+  getStats(): { durationMs: number; toolCount: number } {
+    return { durationMs: Date.now() - this.st.startTime, toolCount: this.st.toolCount };
   }
 
   append(delta: string): void {

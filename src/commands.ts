@@ -8,6 +8,8 @@ export const COMMANDS: Array<{ command: string; description: string }> = [
   { command: "status", description: "Durum: cwd + model + session" },
   { command: "model", description: "Model değiştir" },
   { command: "services", description: "Zo servisleri: durum + restart" },
+  { command: "send", description: "Dosya gönder (/send dosya.xyz)" },
+  { command: "zip", description: "Projeyi arşivle, gönder (/zip [proje])" },
   { command: "help", description: "Yardım" },
 ];
 
@@ -20,8 +22,16 @@ export const HELP_TEXT = `🤖 <b>Zoria Telegram Pi</b> — pi coding agent'ı T
 /list — oturumları listele
 /resume &lt;id&gt; — eski oturuma dön
 /abort — devam eden işi durdur
+/services — Zo servisleri: durum + restart butonları
+/send &lt;dosya&gt; — cwd'deki dosyayı Telegram'a gönder
+/zip [proje] — projeyi arşivleyip gönder (node_modules/.git hariç)
 /status — cwd + oturum + model bilgisi
 /help — bu liste
+
+<b>Dosya / görsel</b>
+• 📸 Görsel gönder (foto) → pi'ye vision prompt (model destekliyorsa)
+• 📄 Dosya gönder → cwd'ye kaydedilir
+• /zip ile projeyi telefona teslim al
 
 <b>Düz mesaj</b> doğrudan pi'ye prompt olarak gider.
 Pi çalışırken yazarsanız sıraya alınır (followUp).
