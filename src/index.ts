@@ -52,12 +52,11 @@ function abortStream(): void {
   streamer?.markAborted();
 }
 
-/** Pi event'lerini aktif streamer'a yönlendir. */
-pi.onSessionChanged(() => {
-  pi.subscribe((event) => {
-    if (!streamer) return;
-    streamer.handleEvent(event);
-  });
+/** Pi event'lerini aktif streamer'a yönlendir.
+ *  TEK subscribe — session değişimlerinde yenisini eklemek delta'ları çiftlerdi (hece tekrarı). */
+pi.subscribe((event) => {
+  if (!streamer) return;
+  streamer.handleEvent(event);
 });
 
 function startStream(chatId: number): TelegramStreamer {

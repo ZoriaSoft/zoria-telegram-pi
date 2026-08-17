@@ -185,11 +185,13 @@ export class PiController {
     this.notifySessionChanged();
   }
 
-  /** Yeni boş oturum aç. */
+  /** Yeni boş oturum aç. Eski session dispose edilir (event çiftlenmesini önler). */
   async newSession(): Promise<void> {
     const runtime = this.runtime;
     if (!runtime) throw new Error("runtime yok");
+    const old = this.session;
     await runtime.newSession();
+    this.disposeOldSession(old);
     this.session = runtime.session;
     this.attachListeners();
     this.notifySessionChanged();
@@ -202,10 +204,23 @@ export class PiController {
     }
     const runtime = this.runtime;
     if (!runtime) throw new Error("runtime yok");
+    const old = this.session;
     await runtime.switchSession(sessionFile);
+    this.disposeOldSession(old);
     this.session = runtime.session;
     this.attachListeners();
     this.notifySessionChanged();
+  }
+
+  /** Eski session'ı güvenle kapatır (ayni session ise dokunmaz). */
+  private disposeOldSession(old: AgentSession | null): void {
+    if (old && old !== this.session) {
+      try {
+        old.dispose();
+      } catch {
+        // zaten kapalıysa sessizce geç
+      }
+    }
   }
 
   /** Aktif oturumu iptal et (akış sırasında). */
