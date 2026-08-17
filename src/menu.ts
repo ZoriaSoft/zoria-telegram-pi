@@ -187,17 +187,26 @@ export function allModelsMenu(
   };
 }
 
-/** Session özeti render'ı: ilk mesajlar + ⋯ + son mesajlar. */
+/** Session özeti render'ı: ilk + son mesajlar, ~3000 char bütçe. */
 export function formatSessionSummary(summary: SessionSummary): string {
   if (summary.total === 0) return "";
-  const fmt = (h: HistoryEntry): string =>
-    `${h.role === "user" ? "👤" : "🤖"}: ${escapeHtml(h.text.slice(0, 130))}`;
+  const first = summary.first;
+  const last = summary.last;
+  const msgs = [...first, ...last];
+  const overhead = 90; // başlık + "⋯" + satır boşlukları
+  const maxMsg = Math.max(80, Math.floor((SUMMARY_BUDGET - overhead) / Math.max(1, msgs.length)));
+  const fmt = (h: HistoryEntry): string => {
+    const cut = h.text.length > maxMsg ? h.text.slice(0, maxMsg) + " …" : h.text;
+    return `${h.role === "user" ? "👤" : "🤖"}: ${escapeHtml(cut)}`;
+  };
   const parts: string[] = [];
-  for (const h of summary.first) parts.push(fmt(h));
-  if (summary.total > summary.first.length + summary.last.length) parts.push("⋯");
-  for (const h of summary.last) parts.push(fmt(h));
+  for (const h of first) parts.push(fmt(h));
+  if (summary.total > first.length + last.length) parts.push("⋯");
+  for (const h of last) parts.push(fmt(h));
   return `\n\n📜 <b>Konuşma</b> (${summary.total} mesaj):\n${parts.join("\n")}`;
 }
+
+const SUMMARY_BUDGET = 3000;
 
 /** Oturum menüsü — bot + pi oturumları butonlu. */
 export function sessionsMenu(sessions: SessionInfo[]): { text: string; kb: InlineKeyboard } {
@@ -288,7 +297,7 @@ export async function handleCallback(
     await pi.resumeSession(found.path, found.cwd);
     const m = mainMenu();
     const who = found.source === "pi" ? "🧑 pi oturumu" : "🤖 bot oturumu";
-    const summary = pi.getSessionSummary(found.path);
+    const summary = pi.getSessionSummary(found.path, 3, 5);
     await edit(
       `✅ ${who} açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${formatSessionSummary(summary)}\n\nDevam etmek için yaz 👇`,
       m.kb,

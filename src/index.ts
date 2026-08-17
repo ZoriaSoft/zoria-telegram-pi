@@ -118,7 +118,7 @@ bot.command("resume", async (ctx) => {
     return;
   }
   await pi.resumeSession(found.path, found.cwd);
-  const summary = pi.getSessionSummary(found.path);
+  const summary = pi.getSessionSummary(found.path, 3, 5);
   await ctx.reply(
     `✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${formatSessionSummary(summary)}\n\nDevam etmek için yaz 👇`,
     { parse_mode: "HTML" },
