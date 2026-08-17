@@ -92,13 +92,16 @@ bot.command("list", async (ctx) => {
     await ctx.reply("Henüz oturum yok.");
     return;
   }
-  const lines = sessions
-    .slice(-15)
-    .reverse()
-    .map((s) => `<code>${s.id.slice(0, 8)}</code> — ${escapeHtml(s.firstMessage) || "(boş)"}`);
-  await ctx.reply(`📚 Son oturumlar:\n${lines.join("\n")}\n\n/resume &lt;id&gt; ile aç`, {
-    parse_mode: "HTML",
-  });
+  const botSessions = sessions.filter((s) => s.source === "bot").slice(0, 10);
+  const piSessions = sessions.filter((s) => s.source === "pi").slice(0, 15);
+  const fmt = (s: { id: string; firstMessage: string; cwd: string; source: "bot" | "pi" }): string => {
+    const where = s.cwd === "/home/workspace" ? "~" : s.cwd.split("/").pop() ?? "?";
+    return `<code>${s.id.slice(0, 8)}</code> · ${where} — ${escapeHtml(s.firstMessage) || "(boş)"}`;
+  };
+  const lines: string[] = [];
+  if (botSessions.length > 0) lines.push("🤖 <b>Bot oturumları:</b>\n" + botSessions.map(fmt).join("\n"));
+  if (piSessions.length > 0) lines.push("🧑 <b>Pi oturumların:</b>\n" + piSessions.map(fmt).join("\n"));
+  await ctx.reply(`📚 ${lines.join("\n\n")}\n\n/resume &lt;id&gt; ile aç`, { parse_mode: "HTML" });
 });
 
 bot.command("resume", async (ctx) => {
@@ -113,8 +116,10 @@ bot.command("resume", async (ctx) => {
     await ctx.reply(`❌ "${id}" ile başlayan oturum bulunamadı.`);
     return;
   }
-  await pi.resumeSession(found.path);
-  await ctx.reply(`✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}`);
+  await pi.resumeSession(found.path, found.cwd);
+  await ctx.reply(`✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>`, {
+    parse_mode: "HTML",
+  });
 });
 
 bot.command("cd", async (ctx) => {

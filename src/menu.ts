@@ -3,7 +3,7 @@ import type { Context } from "grammy";
 import { readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { HELP_TEXT } from "./commands.js";
-import type { PiController } from "./pi.js";
+import type { PiController, SessionInfo } from "./pi.js";
 
 /** Callback data prefix'leri (64 byte limiti içinde). */
 const CB = {
@@ -187,10 +187,10 @@ export function allModelsMenu(
   };
 }
 
-/** Oturum menüsü — son oturumlar butonlu. */
-export function sessionsMenu(sessions: Array<{ id: string; firstMessage: string }>): { text: string; kb: InlineKeyboard } {
+/** Oturum menüsü — bot + pi oturumları butonlu. */
+export function sessionsMenu(sessions: SessionInfo[]): { text: string; kb: InlineKeyboard } {
   const kb = new InlineKeyboard();
-  const recent = sessions.slice(-8).reverse();
+  const recent = sessions.slice(0, 8); // listSessions zaten en yeni önce sıralar
   if (recent.length === 0) {
     return {
       text: "Henüz oturum yok — 🆕 ile başla.",
@@ -199,13 +199,17 @@ export function sessionsMenu(sessions: Array<{ id: string; firstMessage: string 
   }
   recent.forEach((s, i) => {
     if (i % 2 === 0 && i > 0) kb.row();
-    const label = `${s.id.slice(0, 8)} · ${(s.firstMessage || "boş").slice(0, 18)}`;
+    const icon = s.source === "pi" ? "🧑" : "🤖";
+    const where = s.cwd === "/home/workspace" ? "~" : s.cwd.split("/").pop() ?? "?";
+    const label = `${icon} ${s.id.slice(0, 8)} · ${where} · ${(s.firstMessage || "boş").slice(0, 12)}`;
     kb.text(label, `${CB.resume}${s.id.slice(0, 8)}`);
   });
   kb.row().text("🆕 Yeni oturum", CB.new).row();
   kb.add(...backRow().inline_keyboard[0]!);
+  const botCount = sessions.filter((s) => s.source === "bot").length;
+  const piCount = sessions.filter((s) => s.source === "pi").length;
   return {
-    text: `📚 <b>Oturumlar</b> (${sessions.length}) — açılacak oturumu seç:`,
+    text: `📚 <b>Oturumlar</b> — 🤖 bot ${botCount} · 🧑 pi ${piCount}\n\n🤖 = bot'un, 🧑 = senin pi oturumların (devralma):`,
     kb,
   };
 }
@@ -269,9 +273,10 @@ export async function handleCallback(
       await edit(`❌ Oturum bulunamadı: ${id}`);
       return;
     }
-    await pi.resumeSession(found.path);
+    await pi.resumeSession(found.path, found.cwd);
     const m = mainMenu();
-    await edit(`✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}`, m.kb);
+    const who = found.source === "pi" ? "🧑 pi oturumu" : "🤖 bot oturumu";
+    await edit(`✅ ${who} açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>`, m.kb);
     return;
   }
   if (data === CB.new) {

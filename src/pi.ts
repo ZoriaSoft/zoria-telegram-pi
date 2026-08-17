@@ -13,12 +13,16 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai/compat";
+import { readFileSync, readdirSync, type Dirent } from "node:fs";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 export interface SessionInfo {
   id: string;
   path: string;
   firstMessage: string;
+  cwd: string;
+  source: "bot" | "pi";
 }
 
 export interface PiControllerOptions {
@@ -164,8 +168,11 @@ export class PiController {
     this.notifySessionChanged();
   }
 
-  /** Belirli bir session dosyasını aç. */
-  async resumeSession(sessionFile: string): Promise<void> {
+  /** Belirli bir session dosyasını aç. Session'ın cwd'si farklıysa önce oraya geçer. */
+  async resumeSession(sessionFile: string, cwd?: string): Promise<void> {
+    if (cwd && resolve(cwd) !== resolve(this.currentCwd)) {
+      await this.openInCwd(cwd); // runtime'ı session'ın çalıştığı dizine taşı
+    }
     const runtime = this.runtime;
     if (!runtime) throw new Error("runtime yok");
     await runtime.switchSession(sessionFile);
@@ -190,14 +197,17 @@ export class PiController {
     });
   }
 
-  /** Mevcut oturumları listele (tüm cwd'ler için). */
+  /** Mevcut oturumları listele: bot session'ları + kullanıcının pi session'ları (fs tarama). */
   async listSessions(): Promise<SessionInfo[]> {
-    const sessions = await SessionManager.list(this.workspaceRoot, this.sessionDir);
-    return sessions.map((s) => ({
-      id: s.id,
-      path: s.path,
-      firstMessage: (s.firstMessage ?? "").slice(0, 60),
-    }));
+    const out: SessionInfo[] = [];
+    // Bot session'ları (izole dizin)
+    out.push(...scanSessionDir(this.sessionDir, "bot"));
+    // Kullanıcının pi session'ları (~/.pi/agent/sessions/**)
+    const piSessionsDir = resolve(homedir(), ".pi", "agent", "sessions");
+    out.push(...scanSessionDir(piSessionsDir, "pi"));
+    // En yeni önce (dosya adındaki ISO timestamp ile)
+    out.sort((a, b) => b.path.localeCompare(a.path));
+    return out;
   }
 
   /** Prompt gönder. Streaming sırasındaysa kuyruğa followUp olarak eklenir. */
@@ -212,9 +222,9 @@ export class PiController {
   }
 
   /** Yalnızca test/selftest için: bir event'i işle (type-only guard). */
-  static eventKind(event: AgentSessionEvent): string {
-    return event.type;
-  }
+static eventKind(event: AgentSessionEvent): string {
+  return event.type;
+}
 
   dispose(): void {
     this.closeRuntime();
@@ -230,5 +240,60 @@ export class PiController {
       this.runtime = null;
       this.session = null;
     }
+  }
+}
+
+/** Bir dizini (alt klasörler dahil) tarar, .jsonl session'ları okur. */
+function scanSessionDir(dir: string, source: "bot" | "pi"): SessionInfo[] {
+  const out: SessionInfo[] = [];
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out; // dizin yok
+  }
+  for (const e of entries) {
+    if (e.isDirectory() && !e.name.startsWith(".")) {
+      out.push(...scanSessionDir(resolve(dir, e.name), source));
+    } else if (e.isFile() && e.name.endsWith(".jsonl")) {
+      const info = readSessionHeader(resolve(dir, e.name), source);
+      if (info) out.push(info);
+    }
+  }
+  return out;
+}
+
+/** JSONL header'ından id/cwd + ilk user mesajını çıkarır. */
+function readSessionHeader(path: string, source: "bot" | "pi"): SessionInfo | null {
+  try {
+    const lines = readFileSync(path, "utf8").split("\n");
+    const header = lines[0] ? (JSON.parse(lines[0]) as Record<string, unknown>) : null;
+    if (header?.type !== "session") return null;
+    let firstMessage = "";
+    for (const line of lines.slice(1, 30)) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as Record<string, any>;
+        if (entry.type === "message" && entry.message?.role === "user") {
+          const content = entry.message.content ?? [];
+          firstMessage = content
+            .map((c: { text?: string }) => c.text ?? "")
+            .join(" ")
+            .slice(0, 60);
+          break;
+        }
+      } catch {
+        // bozuk satır — atla
+      }
+    }
+    return {
+      id: String(header.id ?? ""),
+      path,
+      firstMessage,
+      cwd: String(header.cwd ?? ""),
+      source,
+    };
+  } catch {
+    return null;
   }
 }
