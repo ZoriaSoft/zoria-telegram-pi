@@ -13,7 +13,8 @@ Node.js + grammY + pi SDK. Tek kullanıcı (whitelist), tek process (supervisord
 - Selftest PASS: `zai/glm-5.3` ile gerçek model yanıtı + tool çağrıları doğrulandı
 - Verify PASS: build (tsc strict) + lint (oxlint) + test (13/13)
 - GitHub: `ZoriaSoft/zoria-telegram-pi` (public, main)
-- **Canlıda değil** — BOT_TOKEN + ALLOWED_IDS bekleniyor (kullanıcıdan)
+- **Canlıda: EVET** — supervisord `zoria-telegram-pi` RUNNING, model `zai/glm-5.3`, bot @zopitelegram_bot
+- BOT_TOKEN + ALLOWED_IDS `.env`'de (chmod 600, gitignore'da)
 
 ## Komutlar
 
@@ -46,11 +47,12 @@ scripts/verify.sh  # aynı verify
 3. **`Model` tipi** `@earendil-works/pi-ai/compat`'dan import edilir (pi-coding-agent re-export etmiyor).
 4. **tsx çalışırken .env** — `loadEnvFile()` config'te çağrılır; dotenv bağımlılığı yok.
 5. Selftest default model kullanıcının pi settings'inden gelir (`bai/deepseek-v4-flash` görüldü — yasak listede olabilir); bot için **`PI_MODEL=zai/glm-5.3`** önerilir.
+6. **`loadEnvFile` .env'i OVERRIDE eder** — global env'de `PI_MODEL=bai/deepseek-v4-flash` tanımlıydı ve .env'deki glm-5.3'ü ezmesi gerekti. .env = proje config'i, önceliği var.
 
 ## Açık işler
 
-- [ ] BOT_TOKEN + ALLOWED_IDS ile canlıya alma (supervisord)
-- [ ] supervisord.conf'u `/etc/zo/supervisord-user.conf`'a ekleme
+- [x] BOT_TOKEN + ALLOWED_IDS ile canlıya alma (supervisord) — @zopitelegram_bot RUNNING
+- [x] supervisord.conf'u `/etc/zo/supervisord-user.conf`'a ekleme
 - [ ] /resume ile eski oturuma dönüşün gerçek bot üzerinde smoke testi
 - [ ] Uzun çıktılar için `sendDocument` (diff/log > 4096 chunk zinciri) — opsiyonel
 

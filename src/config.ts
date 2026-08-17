@@ -10,7 +10,7 @@ export interface Config {
   sessionDir: string;
 }
 
-/** Minimal .env loader (dotenv bağımlılığı yok). Mevcut env değişkenlerini ezmez. */
+/** Minimal .env loader (dotenv bağımlılığı yok). .env'deki değerler process.env'yi ezer — proje config'i global env'den önceliklidir. */
 export function loadEnvFile(path = ".env"): void {
   let content: string;
   try {
@@ -25,7 +25,7 @@ export function loadEnvFile(path = ".env"): void {
     if (eq === -1) continue;
     const key = line.slice(0, eq).trim();
     const value = line.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-    if (key && !(key in process.env)) process.env[key] = value;
+    if (key) process.env[key] = value;
   }
 }
 
