@@ -14,8 +14,10 @@ import {
   mainMenu,
   modelMenu,
   msg,
+  servicesMenu,
   statusText,
 } from "./menu.js";
+import { listServices } from "./services.js";
 
 loadEnvFile();
 
@@ -80,6 +82,15 @@ bot.command("status", async (ctx) => {
 bot.command("model", async (ctx) => {
   const m = modelMenu(pi, await pi.listAvailableModels());
   await ctx.reply(m.text, { parse_mode: "HTML", reply_markup: m.kb });
+});
+
+bot.command("services", async (ctx) => {
+  try {
+    const m = servicesMenu(listServices(config.supervisorConf));
+    await ctx.reply(m.text, { parse_mode: "HTML", reply_markup: m.kb });
+  } catch (err) {
+    await ctx.reply(`❌ ${msg(err)}`);
+  }
 });
 
 bot.command("new", async (ctx) => {
@@ -198,7 +209,7 @@ bot.command("abort", async (ctx) => {
 
 /** Menü butonları. */
 bot.on("callback_query:data", async (ctx) => {
-  await handleCallback(ctx, pi, config.workspaceRoot);
+  await handleCallback(ctx, pi, config.workspaceRoot, config.supervisorConf);
 });
 
 bot.on("message:text", async (ctx) => {

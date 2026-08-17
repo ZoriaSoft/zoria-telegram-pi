@@ -7,6 +7,7 @@ export const COMMANDS: Array<{ command: string; description: string }> = [
   { command: "abort", description: "Devam eden işi durdur" },
   { command: "status", description: "Durum: cwd + model + session" },
   { command: "model", description: "Model değiştir" },
+  { command: "services", description: "Zo servisleri: durum + restart" },
   { command: "help", description: "Yardım" },
 ];
 

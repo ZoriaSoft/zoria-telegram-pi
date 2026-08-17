@@ -8,6 +8,7 @@ export interface Config {
   workspaceRoot: string;
   piModel: string | undefined;
   sessionDir: string;
+  supervisorConf: string;
 }
 
 /** Minimal .env loader (dotenv bağımlılığı yok). .env'deki değerler process.env'yi ezer — proje config'i global env'den önceliklidir. */
@@ -53,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     workspaceRoot,
     piModel: env.PI_MODEL?.trim() || undefined,
     sessionDir: resolve(homedir(), ".pi", "agent", "telegram-sessions"),
+    supervisorConf: env.SUPERVISOR_CONF?.trim() || "/etc/zo/supervisord-user.conf",
   };
 }
 

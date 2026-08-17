@@ -4,6 +4,7 @@ import { readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { HELP_TEXT } from "./commands.js";
 import type { HistoryEntry, PiController, SessionInfo, SessionSummary } from "./pi.js";
+import { listServices, restartService, serviceLine, type ServiceInfo } from "./services.js";
 
 /** Callback data prefix'leri (64 byte limiti içinde). */
 const CB = {
@@ -22,6 +23,8 @@ const CB = {
   model: "mdl:main",
   modelPick: "mdl:pick:", // mdl:pick:<provider>/<id>
   modelAll: "mdl:all:", // mdl:all:<page>
+  svcList: "svc:list",
+  svcRestart: "svc:restart:", // svc:restart:<name>
 } as const;
 
 /** DNA yasak listesi — bu modeller asla önerilmez/gösterilmez. */
@@ -82,6 +85,8 @@ export function mainMenu(): { text: string; kb: InlineKeyboard } {
     .text("⏹️ İptal", CB.abort)
     .row()
     .text("🧠 Model", CB.model)
+    .text("🛠 Servisler", CB.svcList)
+    .row()
     .text("⚙️ Durum", CB.status)
     .text("ℹ️ Yardım", CB.help);
   return { text: "🗂 <b>Menü</b> — ne yapmak istersin?", kb };
@@ -236,11 +241,28 @@ export function sessionsMenu(sessions: SessionInfo[]): { text: string; kb: Inlin
   };
 }
 
+/** Servis menüsü — tüm Zo servisleri durum + restart butonu. */
+export function servicesMenu(services: ServiceInfo[]): { text: string; kb: InlineKeyboard } {
+  const kb = new InlineKeyboard();
+  services.forEach((s, i) => {
+    if (i % 2 === 0 && i > 0) kb.row();
+    kb.text(`🔄 ${s.name}`, `${CB.svcRestart}${s.name}`);
+  });
+  kb.row();
+  kb.add(...backRow().inline_keyboard[0]!);
+  const lines = services.map(serviceLine);
+  return {
+    text: `🛠 <b>Zo Servisleri</b> (${services.length}):\n\n${lines.join("\n")}\n\nRestart için butona dokun:`,
+    kb,
+  };
+}
+
 /** Callback query'leri işler. ctx.editMessageText ile mevcut mesajı günceller. */
 export async function handleCallback(
   ctx: Context,
   pi: PiController,
   workspaceRoot: string,
+  supervisorConf: string,
 ): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data) return;
@@ -362,6 +384,27 @@ export async function handleCallback(
     const page = Number(data.slice(CB.modelAll.length)) || 0;
     const m = allModelsMenu(await pi.listAvailableModels(), page);
     await edit(m.text, m.kb);
+    return;
+  }
+  if (data === CB.svcList) {
+    try {
+      const m = servicesMenu(listServices(supervisorConf));
+      await edit(m.text, m.kb);
+    } catch (err) {
+      await edit(`❌ ${escapeHtml(msg(err))}`);
+    }
+    return;
+  }
+  if (data.startsWith(CB.svcRestart)) {
+    const name = data.slice(CB.svcRestart.length);
+    try {
+      await ctx.answerCallbackQuery({ text: `🔄 ${name} yeniden başlatılıyor...` });
+      const result = restartService(supervisorConf, name);
+      const m = servicesMenu(listServices(supervisorConf));
+      await edit(`✅ <code>${name}</code> yeniden başlatıldı — ${escapeHtml(result)}\n\n${m.text}`, m.kb);
+    } catch (err) {
+      await edit(`❌ ${escapeHtml(msg(err))}`);
+    }
     return;
   }
 }
