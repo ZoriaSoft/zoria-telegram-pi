@@ -10,6 +10,15 @@ export const STOP_BUTTON = "stop";
 
 const stopKeyboard = new InlineKeyboard().text("⏹️ Durdur", STOP_BUTTON);
 
+/** Bash çıktısını kısaltır: ilk yarı + ... + son yarı. */
+export function shortenToolOutput(text: string, max = 1600): string {
+  if (text.length <= max) return text;
+  const half = Math.floor(max / 2);
+  const head = text.slice(0, half);
+  const tail = text.slice(-half);
+  return `${head}\n… [${text.length - max} karakter kesildi] …\n${tail}`;
+}
+
 /**
  * Metni Telegram'a sığacak parçalara böler.
  * Boşluk kırma yok — diff/code çıktısı için karakter bazlı kesim daha güvenli.
@@ -41,6 +50,11 @@ interface StreamState {
   pendingError: string | null;
   toolCount: number;
   startTime: number;
+  /** Aktif tool'un ayrı çıktı mesajı (bash görüntüsü). */
+  toolMsgId: number | null;
+  toolBuffer: string;
+  toolName: string;
+  lastToolEditAt: number;
 }
 
 /**
@@ -66,6 +80,10 @@ export class TelegramStreamer {
       pendingError: null,
       toolCount: 0,
       startTime: Date.now(),
+      toolMsgId: null,
+      toolBuffer: "",
+      toolName: "",
+      lastToolEditAt: 0,
     };
   }
 
@@ -84,7 +102,13 @@ export class TelegramStreamer {
       }
     } else if (event.type === "tool_execution_start") {
       this.st.toolCount += 1;
+      this.st.toolName = event.toolName;
+      this.st.toolBuffer = "";
       this.append(`\n\n🔧 ${event.toolName}`);
+      void this.flushTool();
+    } else if (event.type === "bash_execution_update") {
+      this.st.toolBuffer += event.delta;
+      this.scheduleToolFlush();
     } else if (event.type === "tool_execution_end") {
       this.append(` ✓`);
     } else if (event.type === "agent_end") {
@@ -95,6 +119,34 @@ export class TelegramStreamer {
   /** İş istatistikleri (iş bitince özet için). */
   getStats(): { durationMs: number; toolCount: number } {
     return { durationMs: Date.now() - this.st.startTime, toolCount: this.st.toolCount };
+  }
+
+  /** Tool çıktı mesajını throttle'lu günceller. */
+  private scheduleToolFlush(): void {
+    if (this.st.closed) return;
+    const wait = Math.max(0, 450 - (Date.now() - this.st.lastToolEditAt));
+    setTimeout(() => void this.flushTool(), wait);
+  }
+
+  private async flushTool(): Promise<void> {
+    const st = this.st;
+    if (st.closed) return;
+    const label = `🔧 ${st.toolName}`;
+    const content = st.toolBuffer ? `${label}\n${shortenToolOutput(st.toolBuffer)}` : label;
+    try {
+      if (st.toolMsgId === null) {
+        const sent = await st.api.sendMessage(st.chatId, content);
+        st.toolMsgId = sent.message_id;
+      } else {
+        await st.api.editMessageText(st.chatId, st.toolMsgId, content);
+      }
+      st.lastToolEditAt = Date.now();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/not modified|message to edit not found/i.test(message)) {
+        console.error("[stream] tool çıktı hatası:", message);
+      }
+    }
   }
 
   /** Kullanıcı durdurdu (abort) — bitiş özeti bastırılır. */

@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { splitForTelegram, TELEGRAM_MAX_CHARS } from "../src/stream.js";
+import { shortenToolOutput, splitForTelegram, TELEGRAM_MAX_CHARS } from "../src/stream.js";
 
-describe("splitForTelegram", () => {
+describe("shortenToolOutput", () => {
+  it("kısa çıktıyı olduğu gibi bırakır", () => {
+    expect(shortenToolOutput("merhaba")).toBe("merhaba");
+  });
+
+  it("uzun çıktıyı baş + orta + son ile kısaltır", () => {
+    const text = "a".repeat(3000);
+    const short = shortenToolOutput(text, 1600);
+    expect(short.length).toBeLessThan(text.length);
+    expect(short).toContain("...");
+    expect(short.startsWith("a".repeat(800))).toBe(true);
+    expect(short.endsWith("a".repeat(800))).toBe(true);
+  });
+
+  it("tam eşikte kısaltmaz", () => {
+    const text = "b".repeat(1600);
+    expect(shortenToolOutput(text, 1600)).toBe(text);
+  });
+});
+
   it("kısa metni tek parça bırakır", () => {
     expect(splitForTelegram("merhaba")).toEqual(["merhaba"]);
   });
