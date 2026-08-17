@@ -9,12 +9,24 @@ Node.js + grammY + pi SDK. Tek kullanıcı (whitelist), tek process (supervisord
 
 ## Durum
 
-- **v0.1.0** — bot iskeleti + pi SDK entegrasyonu + oturum yönetimi + streaming
+- **v0.2+** — menü + model seçimi + servisler + görsel/vision + dosya al/gönder + zip + iş özeti
 - Selftest PASS: `zai/glm-5.3` ile gerçek model yanıtı + tool çağrıları doğrulandı
-- Verify PASS: build (tsc strict) + lint (oxlint) + test (13/13)
+- Verify PASS: build (tsc strict) + lint (oxlint) + test (16/16)
 - GitHub: `ZoriaSoft/zoria-telegram-pi` (public, main)
-- **Canlıda: EVET** — supervisord `zoria-telegram-pi` RUNNING, model `zai/glm-5.3`, bot @zopitelegram_bot
-- BOT_TOKEN + ALLOWED_IDS `.env`'de (chmod 600, gitignore'da)
+- **Canlı:** supervisord `zoria-telegram-pi` RUNNING · @zopitelegram_bot · HOME=/root · glm-5.3
+
+## Özellikler (v0.2)
+
+- **Menü:** /menu — Projeler (kategorili, sayfalı), Oturumlar, Model, Servisler, Durum, Yardım; setMyCommands
+- **/cd fuzzy:** kısmi proje adı tamamlanır (/cd okey → zoria-okey)
+- **/model:** kısayollar (zai GLM + ts9 deepseek) + 🔍 tüm modeller sayfalı; yasak liste filtresi (DNA)
+- **/services:** supervisorctl status (14 servis) + 🔄 restart butonları (spawnSync — status exit 3 yutulur)
+- **Görsel vision:** 📸 foto → base64 ImageContent → prompt (model destekliyorsa)
+- **Dosya:** 📄 gönder → cwd'ye kaydet; /send <dosya>; /zip [proje] → tar.gz (node_modules/.git hariç)
+- **İş özeti:** agent_end → ✅ tamamlandı · süre · tool sayısı (tool>0 veya >20sn)
+- **Session birleşik:** 🤖 bot + 🧑 pi session'ları (fs tarama, cwd+ilk mesaj+özet); resume cwd-farkında
+- **Aktiflik koruması:** resume'de mtime <3dk ise ⚠️ uyarı + "Yine de devral" butonu
+- Thinking seviyesi: kullanıcı istediği gibi **high** (değiştirilmedi)
 
 ## Komutlar
 
@@ -54,8 +66,9 @@ scripts/verify.sh  # aynı verify
 
 - [x] BOT_TOKEN + ALLOWED_IDS ile canlıya alma (supervisord) — @zopitelegram_bot RUNNING
 - [x] supervisord.conf'u `/etc/zo/supervisord-user.conf`'a ekleme
-- [ ] /resume ile eski oturuma dönüşün gerçek bot üzerinde smoke testi
-- [ ] Uzun çıktılar için `sendDocument` (diff/log > 4096 chunk zinciri) — opsiyonel
+- [x] Menü + model + servisler + görsel/dosya/zip + iş özeti (v0.2)
+- [ ] İki yönlü session senkronu (bot da kullanıcının dizinine yazsın) — kullanıcı isterse
+- [ ] GitHub Actions CI (lint+test) — isteğe bağlı
 
 ## DNA
 
