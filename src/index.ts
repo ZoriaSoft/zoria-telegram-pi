@@ -5,7 +5,15 @@ import { resolve } from "node:path";
 import { isAllowed, loadConfig, loadEnvFile, type Config } from "./config.js";
 import { PiController } from "./pi.js";
 import { TelegramStreamer } from "./stream.js";
-import { HELP_TEXT, startText } from "./commands.js";
+import { COMMANDS, HELP_TEXT, startText } from "./commands.js";
+import {
+  escapeHtml,
+  handleCallback,
+  listProjects,
+  mainMenu,
+  msg,
+  statusText,
+} from "./menu.js";
 
 loadEnvFile();
 
@@ -50,7 +58,13 @@ function startStream(chatId: number): TelegramStreamer {
 }
 
 bot.command("start", async (ctx) => {
-  await ctx.reply(startText(pi.cwd, true), { parse_mode: "HTML" });
+  const m = mainMenu();
+  await ctx.reply(startText(pi.cwd), { parse_mode: "HTML", reply_markup: m.kb });
+});
+
+bot.command("menu", async (ctx) => {
+  const m = mainMenu();
+  await ctx.reply(m.text, { parse_mode: "HTML", reply_markup: m.kb });
 });
 
 bot.command("help", async (ctx) => {
@@ -58,14 +72,7 @@ bot.command("help", async (ctx) => {
 });
 
 bot.command("status", async (ctx) => {
-  const file = pi.sessionFile ?? "(yok)";
-  await ctx.reply(
-    `📁 cwd: <code>${pi.cwd}</code>\n` +
-      `🧠 model: <code>${pi.modelLabel}</code>\n` +
-      `📄 session: <code>${file}</code>\n` +
-      `⏳ streaming: ${pi.isStreaming ? "evet" : "hayır"}`,
-    { parse_mode: "HTML" },
-  );
+  await ctx.reply(statusText(pi), { parse_mode: "HTML" });
 });
 
 bot.command("new", async (ctx) => {
@@ -101,7 +108,7 @@ bot.command("resume", async (ctx) => {
     return;
   }
   await pi.resumeSession(found.path);
-  await ctx.reply(`✅ Oturum açıldı: ${found.firstMessage || "(isimsiz)"}`);
+  await ctx.reply(`✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}`);
 });
 
 bot.command("cd", async (ctx) => {
@@ -114,12 +121,42 @@ bot.command("cd", async (ctx) => {
   }
   const target = arg === "~" ? config.workspaceRoot : resolve(config.workspaceRoot, arg);
   if (!existsSync(target) || !statSync(target).isDirectory()) {
+    // Kısmi ad tamamlaması: startsWith eşleşen tek proje varsa onu kullan
+    const matches = listProjects(config.workspaceRoot).filter(
+      (p) => p.startsWith(arg) || p.includes(arg),
+    );
+    if (matches.length === 1) {
+      const m = mainMenu();
+      await ctx.reply(`📂 <code>${matches[0]}</code> açılıyor...`, { parse_mode: "HTML" });
+      try {
+        await pi.openInCwd(resolve(config.workspaceRoot, matches[0]!));
+        await ctx.reply(`✅ cwd → <code>${matches[0]}</code>\n\nNe yapmak istersin?`, {
+          parse_mode: "HTML",
+          reply_markup: m.kb,
+        });
+      } catch (err) {
+        await ctx.reply(`❌ Proje açılamadı: ${msg(err)}`);
+      }
+      return;
+    }
+    if (matches.length > 1) {
+      await ctx.reply(
+        `❌ "<code>${escapeHtml(arg)}</code>" belirsiz — eşleşenler:\n` +
+          matches.map((p) => `• ${p}`).join("\n"),
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
     await ctx.reply(`❌ Dizin yok: <code>${target}</code>`, { parse_mode: "HTML" });
     return;
   }
   try {
     await pi.openInCwd(target);
-    await ctx.reply(`✅ cwd → <code>${target}</code>`, { parse_mode: "HTML" });
+    const m = mainMenu();
+    await ctx.reply(`✅ cwd → <code>${target}</code>\n\nNe yapmak istersin?`, {
+      parse_mode: "HTML",
+      reply_markup: m.kb,
+    });
   } catch (err) {
     await ctx.reply(`❌ cwd değiştirilemedi: ${msg(err)}`);
   }
@@ -134,6 +171,11 @@ bot.command("abort", async (ctx) => {
   await ctx.reply("⏹️ İptal edildi.");
 });
 
+/** Menü butonları. */
+bot.on("callback_query:data", async (ctx) => {
+  await handleCallback(ctx, pi, config.workspaceRoot);
+});
+
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text;
   const stream = startStream(ctx.chat.id);
@@ -144,16 +186,9 @@ bot.on("message:text", async (ctx) => {
   }
 });
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function msg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 async function main(): Promise<void> {
   await pi.init();
+  await bot.api.setMyCommands(COMMANDS);
   console.log(`[zoria-telegram-pi] hazır | cwd=${pi.cwd} | model=${pi.modelLabel}`);
   console.log(`[zoria-telegram-pi] yetkili kullanıcılar: ${config.allowedIds.join(", ")}`);
   bot.catch((err) => console.error("[bot] hata:", err.error));
