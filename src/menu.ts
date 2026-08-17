@@ -3,7 +3,7 @@ import type { Context } from "grammy";
 import { readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { HELP_TEXT } from "./commands.js";
-import type { PiController, SessionInfo } from "./pi.js";
+import type { HistoryEntry, PiController, SessionInfo, SessionSummary } from "./pi.js";
 
 /** Callback data prefix'leri (64 byte limiti içinde). */
 const CB = {
@@ -187,6 +187,18 @@ export function allModelsMenu(
   };
 }
 
+/** Session özeti render'ı: ilk mesajlar + ⋯ + son mesajlar. */
+export function formatSessionSummary(summary: SessionSummary): string {
+  if (summary.total === 0) return "";
+  const fmt = (h: HistoryEntry): string =>
+    `${h.role === "user" ? "👤" : "🤖"}: ${escapeHtml(h.text.slice(0, 130))}`;
+  const parts: string[] = [];
+  for (const h of summary.first) parts.push(fmt(h));
+  if (summary.total > summary.first.length + summary.last.length) parts.push("⋯");
+  for (const h of summary.last) parts.push(fmt(h));
+  return `\n\n📜 <b>Konuşma</b> (${summary.total} mesaj):\n${parts.join("\n")}`;
+}
+
 /** Oturum menüsü — bot + pi oturumları butonlu. */
 export function sessionsMenu(sessions: SessionInfo[]): { text: string; kb: InlineKeyboard } {
   const kb = new InlineKeyboard();
@@ -276,16 +288,9 @@ export async function handleCallback(
     await pi.resumeSession(found.path, found.cwd);
     const m = mainMenu();
     const who = found.source === "pi" ? "🧑 pi oturumu" : "🤖 bot oturumu";
-    const history = pi.getSessionHistory(found.path, 5);
-    const historyText =
-      history.length > 0
-        ? "\n\n📜 <b>Son konuşma:</b>\n" +
-          history
-            .map((h) => `${h.role === "user" ? "👤" : "🤖"}: ${escapeHtml(h.text.slice(0, 130))}`)
-            .join("\n")
-        : "";
+    const summary = pi.getSessionSummary(found.path);
     await edit(
-      `✅ ${who} açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${historyText}\n\nDevam etmek için yaz 👇`,
+      `✅ ${who} açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${formatSessionSummary(summary)}\n\nDevam etmek için yaz 👇`,
       m.kb,
     );
     return;

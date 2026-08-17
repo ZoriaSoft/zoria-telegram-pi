@@ -30,6 +30,12 @@ export interface HistoryEntry {
   text: string;
 }
 
+export interface SessionSummary {
+  total: number;
+  first: HistoryEntry[];
+  last: HistoryEntry[];
+}
+
 export interface PiControllerOptions {
   workspaceRoot: string;
   sessionDir: string;
@@ -202,9 +208,12 @@ export class PiController {
     });
   }
 
-  /** Session geçmişini okur (son N mesaj: user + assistant text). */
-  getSessionHistory(sessionFile: string, limit = 6): HistoryEntry[] {
-    return readSessionHistory(sessionFile, limit);
+  /** Session özeti: ilk 2 + son 4 mesaj (bağlam + nerede kaldın). */
+  getSessionSummary(sessionFile: string, firstCount = 2, lastCount = 4): SessionSummary {
+    const all = readSessionHistoryAll(sessionFile);
+    const first = all.slice(0, firstCount);
+    const last = all.slice(Math.min(all.length, Math.max(firstCount, all.length - lastCount)));
+    return { total: all.length, first, last };
   }
 
   /** Mevcut oturumları listele: bot session'ları + kullanıcının pi session'ları (fs tarama). */
@@ -307,8 +316,8 @@ function readSessionHeader(path: string, source: "bot" | "pi"): SessionInfo | nu
   }
 }
 
-/** JSONL'den son N user/assistant text mesajını çıkarır. */
-function readSessionHistory(path: string, limit: number): HistoryEntry[] {
+/** JSONL'den tüm user/assistant text mesajlarını çıkarır. */
+function readSessionHistoryAll(path: string): HistoryEntry[] {
   try {
     const content = readFileSync(path, "utf8");
     const entries: HistoryEntry[] = [];
@@ -330,7 +339,7 @@ function readSessionHistory(path: string, limit: number): HistoryEntry[] {
         // bozuk satır — atla
       }
     }
-    return entries.slice(-limit);
+    return entries;
   } catch {
     return [];
   }

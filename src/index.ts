@@ -8,6 +8,7 @@ import { TelegramStreamer } from "./stream.js";
 import { COMMANDS, HELP_TEXT, startText } from "./commands.js";
 import {
   escapeHtml,
+  formatSessionSummary,
   handleCallback,
   listProjects,
   mainMenu,
@@ -117,16 +118,9 @@ bot.command("resume", async (ctx) => {
     return;
   }
   await pi.resumeSession(found.path, found.cwd);
-  const history = pi.getSessionHistory(found.path, 5);
-  const historyText =
-    history.length > 0
-      ? "\n\n📜 <b>Son konuşma:</b>\n" +
-        history
-          .map((h) => `${h.role === "user" ? "👤" : "🤖"}: ${escapeHtml(h.text.slice(0, 130))}`)
-          .join("\n")
-      : "";
+  const summary = pi.getSessionSummary(found.path);
   await ctx.reply(
-    `✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${historyText}\n\nDevam etmek için yaz 👇`,
+    `✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${formatSessionSummary(summary)}\n\nDevam etmek için yaz 👇`,
     { parse_mode: "HTML" },
   );
 });
