@@ -72,10 +72,12 @@ export class PiController {
     return this.session?.model?.id ?? "default";
   }
 
-  /** Auth'lu modelleri listeler (deterministik sıra). */
-  listAvailableModels(): Array<{ provider: string; id: string }> {
-    const snap = this.modelRuntime?.getAvailableSnapshot() ?? [];
-    return snap
+  /** Auth'lu modelleri listeler (deterministik sıra, canlı auth check).
+   *  Session'a bağlı modelRuntime daralmış olabileceğinden bağımsız örnek kullanılır. */
+  async listAvailableModels(): Promise<Array<{ provider: string; id: string }>> {
+    const runtime = await ModelRuntime.create();
+    const available = await runtime.getAvailable();
+    return available
       .map((m) => ({ provider: m.provider, id: m.id }))
       .sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
   }

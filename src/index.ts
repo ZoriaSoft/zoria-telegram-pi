@@ -77,7 +77,7 @@ bot.command("status", async (ctx) => {
 });
 
 bot.command("model", async (ctx) => {
-  const m = modelMenu(pi, pi.listAvailableModels());
+  const m = modelMenu(pi, await pi.listAvailableModels());
   await ctx.reply(m.text, { parse_mode: "HTML", reply_markup: m.kb });
 });
 

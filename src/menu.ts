@@ -300,7 +300,7 @@ export async function handleCallback(
     await edit(`✅ cwd → <code>${workspaceRoot}</code>`, m.kb);
   }
   if (data === CB.model) {
-    const m = modelMenu(pi, pi.listAvailableModels());
+    const m = modelMenu(pi, await pi.listAvailableModels());
     await edit(m.text, m.kb);
     return;
   }
@@ -308,7 +308,7 @@ export async function handleCallback(
     const ref = data.slice(CB.modelPick.length);
     try {
       const id = await pi.setModelByRef(ref);
-      const m = modelMenu(pi, pi.listAvailableModels());
+      const m = modelMenu(pi, await pi.listAvailableModels());
       await edit(`✅ Model → <code>${escapeHtml(id)}</code>`, m.kb);
     } catch (err) {
       await edit(`❌ ${escapeHtml(msg(err))}`);
@@ -317,7 +317,7 @@ export async function handleCallback(
   }
   if (data.startsWith(CB.modelAll)) {
     const page = Number(data.slice(CB.modelAll.length)) || 0;
-    const m = allModelsMenu(pi.listAvailableModels(), page);
+    const m = allModelsMenu(await pi.listAvailableModels(), page);
     await edit(m.text, m.kb);
     return;
   }
