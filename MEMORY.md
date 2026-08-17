@@ -48,6 +48,7 @@ scripts/verify.sh  # aynı verify
 4. **tsx çalışırken .env** — `loadEnvFile()` config'te çağrılır; dotenv bağımlılığı yok.
 5. Selftest default model kullanıcının pi settings'inden gelir (`bai/deepseek-v4-flash` görüldü — yasak listede olabilir); bot için **`PI_MODEL=zai/glm-5.3`** önerilir.
 6. **`loadEnvFile` .env'i OVERRIDE eder** — global env'de `PI_MODEL=bai/deepseek-v4-flash` tanımlıydı ve .env'deki glm-5.3'ü ezmesi gerekti. .env = proje config'i, önceliği var.
+7. **supervisord HOME kritik** — bot pi auth'unu `$HOME/.pi/agent/auth.json`'dan okur. `HOME="/home/workspace"` yapılırsa bot boş auth görür → **0 model** (menüde "Tüm modeller (0)"). `HOME="/root"` olmalı (pi auth `/root/.pi/agent/auth.json`'da).
 
 ## Açık işler
 
