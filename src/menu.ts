@@ -13,6 +13,7 @@ const CB = {
   cd: "cd:", // cd:<projeAdı>
   sess: "m:sess",
   resume: "rs:", // rs:<id8>
+  resumeForce: "rsf:", // rsf:<id8> — aktiflik uyarısını geç
   new: "act:new",
   abort: "act:abort",
   status: "act:status",
@@ -286,12 +287,24 @@ export async function handleCallback(
     await edit(m.text, m.kb);
     return;
   }
-  if (data.startsWith(CB.resume)) {
-    const id = data.slice(CB.resume.length);
+  if (data.startsWith(CB.resume) || data.startsWith(CB.resumeForce)) {
+    const force = data.startsWith(CB.resumeForce);
+    const id = (force ? data.slice(CB.resumeForce.length) : data.slice(CB.resume.length)).slice(0, 8);
     const sessions = await pi.listSessions();
     const found = sessions.find((s) => s.id.startsWith(id));
     if (!found) {
       await edit(`❌ Oturum bulunamadı: ${id}`);
+      return;
+    }
+    if (!force && pi.isSessionActive(found.path)) {
+      const kb = new InlineKeyboard()
+        .text("⚠️ Yine de devral", `${CB.resumeForce}${id}`)
+        .row()
+        .add(...backRow().inline_keyboard[0]!);
+      await edit(
+        `⚠️ Bu oturum <b>şu an başka yerde aktif</b> görünüyor (son yazma birkaç dakika içinde).\n\nDevralırsan iki yer aynı anda yazabilir ve konuşma dalları karışabilir.\n\nÖnce pi'deki o sohbeti kapat, sonra devral.`,
+        kb,
+      );
       return;
     }
     await pi.resumeSession(found.path, found.cwd);

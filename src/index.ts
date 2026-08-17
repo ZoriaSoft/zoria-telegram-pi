@@ -1,5 +1,5 @@
 import { autoRetry } from "@grammyjs/auto-retry";
-import { Bot, type Context } from "grammy";
+import { Bot, InlineKeyboard, type Context } from "grammy";
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { isAllowed, loadConfig, loadEnvFile, type Config } from "./config.js";
@@ -115,6 +115,17 @@ bot.command("resume", async (ctx) => {
   const found = sessions.find((s) => s.id.startsWith(id));
   if (!found) {
     await ctx.reply(`❌ "${id}" ile başlayan oturum bulunamadı.`);
+    return;
+  }
+  if (pi.isSessionActive(found.path)) {
+    const kb = new InlineKeyboard()
+      .text("⚠️ Yine de devral", `rsf:${found.id.slice(0, 8)}`)
+      .row()
+      .text("◀️ Vazgeç", "m:sess");
+    await ctx.reply(
+      `⚠️ Bu oturum <b>şu an başka yerde aktif</b> görünüyor (son yazma birkaç dakika içinde).\n\nDevralırsan iki yer aynı anda yazabilir ve konuşma dalları karışabilir.\n\nÖnce pi'deki o sohbeti kapat, sonra devral.`,
+      { parse_mode: "HTML", reply_markup: kb },
+    );
     return;
   }
   await pi.resumeSession(found.path, found.cwd);

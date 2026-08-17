@@ -13,7 +13,7 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai/compat";
-import { readFileSync, readdirSync, type Dirent } from "node:fs";
+import { readFileSync, readdirSync, statSync, type Dirent } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
@@ -206,6 +206,15 @@ export class PiController {
     this.session?.subscribe((event) => {
       for (const listener of this.listeners) listener(event);
     });
+  }
+
+  /** Session dosyası son windowMs içinde yazıldıysa aktif sayılır (başka process çakışma riski). */
+  isSessionActive(sessionFile: string, windowMs = 3 * 60_000): boolean {
+    try {
+      return Date.now() - statSync(sessionFile).mtimeMs < windowMs;
+    } catch {
+      return false; // dosya yok — aktif değil
+    }
   }
 
   /** Session özeti: ilk 2 + son 4 mesaj (bağlam + nerede kaldın). */
