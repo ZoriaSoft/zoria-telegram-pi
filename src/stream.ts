@@ -1,10 +1,14 @@
-import type { Api } from "grammy";
+import { InlineKeyboard, type Api } from "grammy";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
 /** Telegram tek mesaj limiti. */
 export const TELEGRAM_MAX_CHARS = 4096;
 /** Art arda edit çağrıları arası minimum bekleme (rate limit). */
 export const EDIT_INTERVAL_MS = 450;
+/** Akış mesajlarındaki durdur butonu callback data'sı. */
+export const STOP_BUTTON = "stop";
+
+const stopKeyboard = new InlineKeyboard().text("⏹️ Durdur", STOP_BUTTON);
 
 /**
  * Metni Telegram'a sığacak parçalara böler.
@@ -46,6 +50,7 @@ interface StreamState {
 export class TelegramStreamer {
   private st: StreamState;
   private onDone: (() => void) | null = null;
+  private aborted = false;
 
   constructor(chatId: number, api: Api) {
     this.st = {
@@ -92,6 +97,16 @@ export class TelegramStreamer {
     return { durationMs: Date.now() - this.st.startTime, toolCount: this.st.toolCount };
   }
 
+  /** Kullanıcı durdurdu (abort) — bitiş özeti bastırılır. */
+  markAborted(): void {
+    this.aborted = true;
+    this.finish();
+  }
+
+  wasAborted(): boolean {
+    return this.aborted;
+  }
+
   append(delta: string): void {
     if (this.st.closed || !delta) return;
     this.st.buffer += delta;
@@ -117,7 +132,7 @@ export class TelegramStreamer {
     this.finish();
   }
 
-  /** Akışı bitir: kalan buffer'ı gönder, timer'ı temizle. */
+  /** Akışı bitir: kalan buffer'ı gönder, timer'ı temizle, durdur butonunu kaldır. */
   finish(): void {
     if (this.st.closed) return;
     this.st.closed = true;
@@ -129,6 +144,11 @@ export class TelegramStreamer {
       const final = this.st.pendingError ?? this.st.buffer;
       this.st.buffer = "";
       void this.sendNow(final);
+    }
+    // Akış bitti — durdur butonunu mesajdan kaldır
+    if (this.st.messageId !== null) {
+      const { chatId, messageId, api } = this.st;
+      void api.editMessageReplyMarkup(chatId, messageId).catch(() => {});
     }
     this.onDone?.();
   }
@@ -159,10 +179,10 @@ export class TelegramStreamer {
     const st = this.st;
     try {
       if (st.messageId === null) {
-        const sent = await st.api.sendMessage(st.chatId, text);
+        const sent = await st.api.sendMessage(st.chatId, text, { reply_markup: stopKeyboard });
         st.messageId = sent.message_id;
       } else {
-        await st.api.editMessageText(st.chatId, st.messageId, text);
+        await st.api.editMessageText(st.chatId, st.messageId, text, { reply_markup: stopKeyboard });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

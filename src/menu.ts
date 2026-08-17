@@ -263,6 +263,7 @@ export async function handleCallback(
   pi: PiController,
   workspaceRoot: string,
   supervisorConf: string,
+  onAbort?: () => void,
 ): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data) return;
@@ -346,9 +347,11 @@ export async function handleCallback(
     return;
   }
   if (data === CB.abort) {
+    onAbort?.();
     const was = pi.isStreaming;
     if (was) await pi.abort();
-    await edit(was ? "⏹️ İptal edildi." : "Şu an çalışan bir iş yok.");
+    const m = mainMenu();
+    await edit(`⏹️ ${was ? "İptal edildi." : "Şu an çalışan bir iş yok."}\n\n${m.text}`, m.kb);
     return;
   }
   if (data === CB.status) {

@@ -5,7 +5,7 @@ import { writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { isAllowed, loadConfig, loadEnvFile, type Config } from "./config.js";
 import { PiController } from "./pi.js";
-import { TelegramStreamer } from "./stream.js";
+import { STOP_BUTTON, TelegramStreamer } from "./stream.js";
 import { COMMANDS, HELP_TEXT, startText } from "./commands.js";
 import {
   escapeHtml,
@@ -43,6 +43,14 @@ bot.use(async (ctx, next) => {
 
 /** Aktif streamer — her prompt için yeniden kurulur. */
 let streamer: TelegramStreamer | null = null;
+/** Abort sonrası bitiş özeti bastırılır. */
+let suppressSummary = false;
+
+/** Akışı durdur (stop butonu / /abort / menü İptal). */
+function abortStream(): void {
+  suppressSummary = true;
+  streamer?.markAborted();
+}
 
 /** Pi event'lerini aktif streamer'a yönlendir. */
 pi.onSessionChanged(() => {
@@ -53,13 +61,14 @@ pi.onSessionChanged(() => {
 });
 
 function startStream(chatId: number): TelegramStreamer {
+  suppressSummary = false;
   streamer?.finish();
   const s = new TelegramStreamer(chatId, bot.api);
   s.onClose(() => {
     if (streamer === s) streamer = null;
-    // Uzun/tool'lu işlerde bitiş özeti (kısa cevaplarda spam yapma)
+    // Uzun/tool'lu işlerde bitiş özeti (kısa cevaplarda ve abort'ta spam yapma)
     const { durationMs, toolCount } = s.getStats();
-    if (toolCount > 0 || durationMs > 20_000) {
+    if (!suppressSummary && (toolCount > 0 || durationMs > 20_000)) {
       bot.api
         .sendMessage(chatId, `✅ İş tamamlandı · ${Math.round(durationMs / 1000)}sn · ${toolCount} tool çağrısı`)
         .catch(() => {});
@@ -221,17 +230,25 @@ bot.command("cd", async (ctx) => {
 });
 
 bot.command("abort", async (ctx) => {
-  if (!pi.isStreaming) {
-    await ctx.reply("Şu an çalışan bir iş yok.");
-    return;
-  }
-  await pi.abort();
-  await ctx.reply("⏹️ İptal edildi.");
+  abortStream();
+  if (pi.isStreaming) await pi.abort();
+  const m = mainMenu();
+  await ctx.reply(`⏹️ İptal edildi.\n\n${m.text}`, { parse_mode: "HTML", reply_markup: m.kb });
 });
 
-/** Menü butonları. */
+/** Akış mesajlarındaki ⏹️ Durdur butonu — her an durdur + ana menüye dön. */
 bot.on("callback_query:data", async (ctx) => {
-  await handleCallback(ctx, pi, config.workspaceRoot, config.supervisorConf);
+  if (ctx.callbackQuery.data === STOP_BUTTON) {
+    await ctx.answerCallbackQuery({ text: "⏹️ Durduruluyor..." });
+    abortStream();
+    if (pi.isStreaming) await pi.abort();
+    const m = mainMenu();
+    await ctx
+      .editMessageText(`⏹️ İptal edildi.\n\n${m.text}`, { parse_mode: "HTML", reply_markup: m.kb })
+      .catch(() => {});
+    return;
+  }
+  await handleCallback(ctx, pi, config.workspaceRoot, config.supervisorConf, abortStream);
 });
 
 bot.on("message:text", async (ctx) => {
