@@ -14,7 +14,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai/compat";
 import type { ImageContent } from "@earendil-works/pi-ai/compat";
-import { readFileSync, readdirSync, statSync, type Dirent } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync, type Dirent } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
@@ -63,8 +63,15 @@ export class PiController {
   constructor(opts: PiControllerOptions) {
     this.workspaceRoot = resolve(opts.workspaceRoot);
     this.sessionDir = opts.sessionDir;
-    this.modelArg = opts.model;
     this.currentCwd = this.workspaceRoot;
+    // Kalıcı model seçimi (disk'te) varsa onu kullan, yoksa config'ten
+    this.modelArg = opts.model;
+    try {
+      const saved = readFileSync(resolve(this.sessionDir, "selected-model"), "utf8").trim();
+      if (saved) this.modelArg = saved;
+    } catch {
+      // henüz seçim yok
+    }
   }
 
   /** Başlangıç: workspace kökünde oturum açar (en son oturum devam eder). */
@@ -113,6 +120,13 @@ export class PiController {
     const model = this.modelRuntime.getModel(provider, id);
     if (!model) throw new Error(`Model bulunamadı: ${ref}`);
     await session.setModel(model);
+    // Kalıcı: seçim disk'e yazılır → restart sonrası da bu modelle başlar
+    this.resolvedModel = model;
+    try {
+      writeFileSync(resolve(this.sessionDir, "selected-model"), ref, "utf8");
+    } catch {
+      // yazma hatası kritik değil
+    }
     return model.id;
   }
 
@@ -161,7 +175,8 @@ export class PiController {
     const runtime = await createAgentSessionRuntime(factory, {
       cwd: target,
       agentDir: getAgentDir(),
-      sessionManager: SessionManager.create(target, this.sessionDir),
+      // Devam mantığı: bu cwd'nin en son session'ı varsa devam et, yoksa yeni aç
+      sessionManager: latestSessionForCwd(this.sessionDir, target),
     });
 
     this.runtime = runtime;
@@ -271,6 +286,25 @@ static eventKind(event: AgentSessionEvent): string {
       this.session = null;
     }
   }
+}
+
+/** Bu cwd'nin en son bot session'ını bulur (yoksa yeni session açılır). */
+function latestSessionForCwd(sessionDir: string, cwd: string): SessionManager {
+  let latest: { path: string; mtime: number } | null = null;
+  try {
+    for (const f of readdirSync(sessionDir)) {
+      if (!f.endsWith(".jsonl")) continue;
+      const path = resolve(sessionDir, f);
+      const header = readSessionHeader(path, "bot");
+      if (!header || header.cwd !== cwd) continue;
+      const mtime = statSync(path).mtimeMs;
+      if (!latest || mtime > latest.mtime) latest = { path, mtime };
+    }
+  } catch {
+    // dizin yok — yeni session
+  }
+  if (latest) return SessionManager.open(latest.path);
+  return SessionManager.create(cwd, sessionDir);
 }
 
 /** Bir dizini (alt klasörler dahil) tarar, .jsonl session'ları okur. */
