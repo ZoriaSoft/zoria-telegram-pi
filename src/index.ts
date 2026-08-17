@@ -11,6 +11,7 @@ import {
   handleCallback,
   listProjects,
   mainMenu,
+  modelMenu,
   msg,
   statusText,
 } from "./menu.js";
@@ -73,6 +74,11 @@ bot.command("help", async (ctx) => {
 
 bot.command("status", async (ctx) => {
   await ctx.reply(statusText(pi), { parse_mode: "HTML" });
+});
+
+bot.command("model", async (ctx) => {
+  const m = modelMenu(pi, pi.listAvailableModels());
+  await ctx.reply(m.text, { parse_mode: "HTML", reply_markup: m.kb });
 });
 
 bot.command("new", async (ctx) => {

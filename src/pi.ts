@@ -72,6 +72,32 @@ export class PiController {
     return this.session?.model?.id ?? "default";
   }
 
+  /** Auth'lu modelleri listeler (deterministik sıra). */
+  listAvailableModels(): Array<{ provider: string; id: string }> {
+    const snap = this.modelRuntime?.getAvailableSnapshot() ?? [];
+    return snap
+      .map((m) => ({ provider: m.provider, id: m.id }))
+      .sort((a, b) => `${a.provider}/${a.id}`.localeCompare(`${b.provider}/${b.id}`));
+  }
+
+  /** Model değiştir ("provider/id" referansı ile). */
+  async setModelByRef(ref: string): Promise<string> {
+    const slash = ref.indexOf("/");
+    if (slash <= 0) throw new Error(`Geçersiz model referansı: ${ref}`);
+    const provider = ref.slice(0, slash);
+    const id = ref.slice(slash + 1);
+    const session = this.session;
+    if (!session) throw new Error("aktif session yok");
+    if (session.isStreaming) {
+      throw new Error("akış sırasında model değişmez — önce /abort");
+    }
+    this.modelRuntime ??= await ModelRuntime.create();
+    const model = this.modelRuntime.getModel(provider, id);
+    if (!model) throw new Error(`Model bulunamadı: ${ref}`);
+    await session.setModel(model);
+    return model.id;
+  }
+
   get isStreaming(): boolean {
     return this.session?.isStreaming ?? false;
   }

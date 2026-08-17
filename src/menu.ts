@@ -18,7 +18,23 @@ const CB = {
   status: "act:status",
   help: "act:help",
   root: "act:root",
+  model: "mdl:main",
+  modelPick: "mdl:pick:", // mdl:pick:<provider>/<id>
+  modelAll: "mdl:all:", // mdl:all:<page>
 } as const;
+
+/** DNA yasak listesi — bu modeller asla önerilmez/gösterilmez. */
+const FORBIDDEN_MODELS = new Set([
+  "ts9/deepseek-v4-flash",
+  "ts9/deepseek-v4-flash-0731",
+  "ts9/deepseek-v4-pro-0813",
+  "ts9/qwen3.8-max",
+]);
+
+/** Kısayol model prefix'leri (önerilen). */
+const QUICK_MODEL_PREFIXES = ["zai/", "ts9/deepseek-v4-pro", "ts9/iamhc/DeepSeek-V4-Pro"];
+
+const MODEL_PAGE_SIZE = 4;
 
 const PAGE_SIZE = 6;
 
@@ -64,6 +80,7 @@ export function mainMenu(): { text: string; kb: InlineKeyboard } {
     .text("🆕 Yeni oturum", CB.new)
     .text("⏹️ İptal", CB.abort)
     .row()
+    .text("🧠 Model", CB.model)
     .text("⚙️ Durum", CB.status)
     .text("ℹ️ Yardım", CB.help);
   return { text: "🗂 <b>Menü</b> — ne yapmak istersin?", kb };
@@ -110,6 +127,67 @@ export function projectListMenu(
   };
 }
 
+/** Model menüsü: kısayollar + tüm modeller kapısı. */
+export function modelMenu(
+  pi: PiController,
+  models: Array<{ provider: string; id: string }>,
+): { text: string; kb: InlineKeyboard } {
+  const kb = new InlineKeyboard();
+  const quick = models.filter((m) => {
+    const ref = `${m.provider}/${m.id}`;
+    if (FORBIDDEN_MODELS.has(ref)) return false;
+    return QUICK_MODEL_PREFIXES.some((p) => ref.startsWith(p));
+  });
+  const rows: Array<Array<{ ref: string; label: string }>> = [];
+  let current = -1;
+  for (const m of quick) {
+    const ref = `${m.provider}/${m.id}`;
+    const label = m.provider === "zai" ? m.id : ref;
+    if (current === -1 || rows[current]!.length >= 2) {
+      rows.push([]);
+      current += 1;
+    }
+    rows[current]!.push({ ref, label });
+  }
+  for (const row of rows) {
+    kb.add(...row.map((b) => InlineKeyboard.text(b.label, `${CB.modelPick}${b.ref}`))).row();
+  }
+  kb.text(`🔍 Tüm modeller (${models.length})`, `${CB.modelAll}0`).row();
+  kb.add(...backRow().inline_keyboard[0]!);
+  return {
+    text: `🧠 <b>Model</b> — mevcut: <code>${pi.modelLabel}</code>\n\nSeç: (akış sırasında değişmez, önce /abort)`,
+    kb,
+  };
+}
+
+/** Tüm modeller — sayfalı liste. */
+export function allModelsMenu(
+  models: Array<{ provider: string; id: string }>,
+  page: number,
+): { text: string; kb: InlineKeyboard } {
+  const totalPages = Math.max(1, Math.ceil(models.length / MODEL_PAGE_SIZE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const items = models.slice(safePage * MODEL_PAGE_SIZE, (safePage + 1) * MODEL_PAGE_SIZE);
+
+  const kb = new InlineKeyboard();
+  for (const m of items) {
+    const ref = `${m.provider}/${m.id}`;
+    if (FORBIDDEN_MODELS.has(ref)) continue;
+    kb.text(ref, `${CB.modelPick}${ref}`).row();
+  }
+  kb.row();
+  if (safePage > 0) kb.text("◀️", `${CB.modelAll}${safePage - 1}`);
+  kb.text(`📋 ${safePage + 1}/${totalPages}`, `${CB.modelAll}${safePage}`);
+  if (safePage < totalPages - 1) kb.text("▶️", `${CB.modelAll}${safePage + 1}`);
+  kb.row().text("◀️ Model menüsü", CB.model).row();
+  kb.add(...backRow().inline_keyboard[0]!);
+  return {
+    text: `🔍 <b>Tüm modeller</b> (${models.length}) — sayfa ${safePage + 1}/${totalPages}:`,
+    kb,
+  };
+}
+
+/** Oturum menüsü — son oturumlar butonlu. */
 export function sessionsMenu(sessions: Array<{ id: string; firstMessage: string }>): { text: string; kb: InlineKeyboard } {
   const kb = new InlineKeyboard();
   const recent = sessions.slice(-8).reverse();
@@ -220,6 +298,28 @@ export async function handleCallback(
     await pi.openInCwd(workspaceRoot);
     const m = mainMenu();
     await edit(`✅ cwd → <code>${workspaceRoot}</code>`, m.kb);
+  }
+  if (data === CB.model) {
+    const m = modelMenu(pi, pi.listAvailableModels());
+    await edit(m.text, m.kb);
+    return;
+  }
+  if (data.startsWith(CB.modelPick)) {
+    const ref = data.slice(CB.modelPick.length);
+    try {
+      const id = await pi.setModelByRef(ref);
+      const m = modelMenu(pi, pi.listAvailableModels());
+      await edit(`✅ Model → <code>${escapeHtml(id)}</code>`, m.kb);
+    } catch (err) {
+      await edit(`❌ ${escapeHtml(msg(err))}`);
+    }
+    return;
+  }
+  if (data.startsWith(CB.modelAll)) {
+    const page = Number(data.slice(CB.modelAll.length)) || 0;
+    const m = allModelsMenu(pi.listAvailableModels(), page);
+    await edit(m.text, m.kb);
+    return;
   }
 }
 
