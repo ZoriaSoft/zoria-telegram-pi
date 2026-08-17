@@ -276,7 +276,18 @@ export async function handleCallback(
     await pi.resumeSession(found.path, found.cwd);
     const m = mainMenu();
     const who = found.source === "pi" ? "🧑 pi oturumu" : "🤖 bot oturumu";
-    await edit(`✅ ${who} açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>`, m.kb);
+    const history = pi.getSessionHistory(found.path, 5);
+    const historyText =
+      history.length > 0
+        ? "\n\n📜 <b>Son konuşma:</b>\n" +
+          history
+            .map((h) => `${h.role === "user" ? "👤" : "🤖"}: ${escapeHtml(h.text.slice(0, 130))}`)
+            .join("\n")
+        : "";
+    await edit(
+      `✅ ${who} açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${historyText}\n\nDevam etmek için yaz 👇`,
+      m.kb,
+    );
     return;
   }
   if (data === CB.new) {

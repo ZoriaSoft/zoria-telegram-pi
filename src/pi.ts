@@ -25,6 +25,11 @@ export interface SessionInfo {
   source: "bot" | "pi";
 }
 
+export interface HistoryEntry {
+  role: "user" | "assistant";
+  text: string;
+}
+
 export interface PiControllerOptions {
   workspaceRoot: string;
   sessionDir: string;
@@ -197,6 +202,11 @@ export class PiController {
     });
   }
 
+  /** Session geçmişini okur (son N mesaj: user + assistant text). */
+  getSessionHistory(sessionFile: string, limit = 6): HistoryEntry[] {
+    return readSessionHistory(sessionFile, limit);
+  }
+
   /** Mevcut oturumları listele: bot session'ları + kullanıcının pi session'ları (fs tarama). */
   async listSessions(): Promise<SessionInfo[]> {
     const out: SessionInfo[] = [];
@@ -264,8 +274,7 @@ function scanSessionDir(dir: string, source: "bot" | "pi"): SessionInfo[] {
 }
 
 /** JSONL header'ından id/cwd + ilk user mesajını çıkarır. */
-function readSessionHeader(path: string, source: "bot" | "pi"): SessionInfo | null {
-  try {
+function readSessionHeader(path: string, source: "bot" | "pi"): SessionInfo | null {  try {
     const lines = readFileSync(path, "utf8").split("\n");
     const header = lines[0] ? (JSON.parse(lines[0]) as Record<string, unknown>) : null;
     if (header?.type !== "session") return null;
@@ -295,5 +304,34 @@ function readSessionHeader(path: string, source: "bot" | "pi"): SessionInfo | nu
     };
   } catch {
     return null;
+  }
+}
+
+/** JSONL'den son N user/assistant text mesajını çıkarır. */
+function readSessionHistory(path: string, limit: number): HistoryEntry[] {
+  try {
+    const content = readFileSync(path, "utf8");
+    const entries: HistoryEntry[] = [];
+    for (const line of content.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as Record<string, any>;
+        if (entry.type !== "message") continue;
+        const role = entry.message?.role;
+        if (role !== "user" && role !== "assistant") continue;
+        const contentArr: Array<{ type?: string; text?: string }> = entry.message?.content ?? [];
+        const text = contentArr
+          .filter((c) => c.type === "text")
+          .map((c) => c.text ?? "")
+          .join(" ")
+          .trim();
+        if (text) entries.push({ role, text });
+      } catch {
+        // bozuk satır — atla
+      }
+    }
+    return entries.slice(-limit);
+  } catch {
+    return [];
   }
 }

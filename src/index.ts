@@ -117,9 +117,18 @@ bot.command("resume", async (ctx) => {
     return;
   }
   await pi.resumeSession(found.path, found.cwd);
-  await ctx.reply(`✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>`, {
-    parse_mode: "HTML",
-  });
+  const history = pi.getSessionHistory(found.path, 5);
+  const historyText =
+    history.length > 0
+      ? "\n\n📜 <b>Son konuşma:</b>\n" +
+        history
+          .map((h) => `${h.role === "user" ? "👤" : "🤖"}: ${escapeHtml(h.text.slice(0, 130))}`)
+          .join("\n")
+      : "";
+  await ctx.reply(
+    `✅ Oturum açıldı: ${escapeHtml(found.firstMessage || "(isimsiz)")}\n📁 <code>${found.cwd}</code>${historyText}\n\nDevam etmek için yaz 👇`,
+    { parse_mode: "HTML" },
+  );
 });
 
 bot.command("cd", async (ctx) => {
